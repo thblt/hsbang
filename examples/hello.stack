@@ -1,0 +1,4 @@
+#!/usr/bin/env stack
+-- stack --resolver=lts-11.7 runghc
+
+main = putStrLn "Hello, world!"

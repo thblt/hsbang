@@ -1,0 +1,4 @@
+#!/usr/bin/env hsbang
+--stack --resolver=lts-11.7 --install-ghc script
+
+main = putStrLn "Hello, world!"

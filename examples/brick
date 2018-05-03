@@ -1,0 +1,12 @@
+#!/usr/bin/env hsbang
+-- stack --resolver=lts-11.7 ghc --package brick
+
+module Main where
+
+import Brick
+
+ui :: Widget ()
+ui = str "Hello, brick!"
+
+main :: IO ()
+main = simpleMain ui

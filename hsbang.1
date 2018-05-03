@@ -1,0 +1,66 @@
+.\" Process this file with
+.\" groff -man -Tascii foo.1
+.\"
+.TH HSBANG 1 "MAY 2018"
+.SH NAME
+hsbang \- compile and execute Haskell programs as if they were scripts
+.SH SYNOPSIS
+.B hsbang (FILE [ARGS] | --gc)
+.SH DESCRIPTION
+.B hsbang
+transparently compiles a Haskell program using
+.BR stack (1)
+then caches the generated binary
+before running it.  If the binary already exists and is more recent than the
+source file, no compilation takes place.
+
+When compiling, hsbang assumes that the second line of FILE contains
+common arguments for invoking stack.
+
+Except with --gc, hsbang should be use only in a shebang, like this:
+
+#!/usr/bin/env hsbang
+-- stack --resolver=lts11.7 --package=turtle
+
+.SH OPTIONS
+.IP --gc
+Remove files from binary cache which have no coresponding source file.
+
+.SH LITERATE HASKELL SUPPORT
+
+If
+.BR FILE
+has extension .lhs, the extension is unmodified.
+
+If hsbang is called as
+.BR lhsbang,
+a file without an extension is given the extension .lhs instead of .hs.
+
+.SH FILES
+.I /etc/foo.conf
+.RS
+The system wide configuration file. See
+.BR foo (5)
+for further details.
+.RE
+.I ~/.foorc
+.RS
+Per user configuration file. See
+.BR foo (5)
+for further details.
+.SH ENVIRONMENT
+.IP XDG_CACHE_HOME
+XDG cache directory [default: $HOME/.cache]
+
+.IP HSBANG_CACHE_DIR
+Binary cache directory. If this variable is defined, the value of $XDG_CACHE_DIR is ignored. [default: $XDG_CACHE_DIR/hsbang]
+.IP  HSBANG_VERBOSE
+Enable HSBANG output [default: 0]
+.IP HSBANG_GHC_VERBOSITY
+Set GHC verbosity level [default: 0]
+
+.SH AUTHOR
+Thibault Polge <thibault@thb.lt>
+.SH "SEE ALSO"
+.BR stack (1),
+.BR ghc (1)

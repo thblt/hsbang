@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+
+DEFAULT_HSBANG_GHC_FLAGS="-threaded -O3"
+
+if [ -f /etc/NIXOS ]; then
+    DEFAULT_HSBANG_STACK_FLAGS="--nix"
+else
+    DEFAULT_HSBANG_STACK_FLAGS=""
+fi
+
+hsb_usage() {
+    cat <<USAGE
+Usage:
+  `basename $0` (--gc | FILE [ARGS...])
+USAGE
+    exit $1
+}
+
+hsb_say() {
+    if [ $HSBANG_VERBOSE ]; then
+        echo $@
+    fi
+}
+
+hsb_fail() {
+    >&2 echo "[hsbang] Error: $1"
+    exit 1
+}
+
+hsb_try_mkdir() {
+    mkdir -p "$1" >/dev/null 2>&1
+
+    if [ ! -d "$1" ]; then
+        hsb_fail "[hsbang] Error: $1 doesn't exist, and cannot be created."
+    fi
+}
+
+hsb_gc() {
+    echo "Looking for obsolete cached binaries in $HSBANG_CACHE_DIR ..."
+
+    seen=0
+    removed=0
+
+    for binary in $(find "$HSBANG_CACHE_DIR" -type f); do
+        source=/$(realpath "$binary" --relative-to="$HSBANG_CACHE_DIR")
+
+        seen=$[$seen + 1]
+        if [ ! -f $source ]; then
+            # echo "$source doesn't exist, removing $binary."
+            rm $binary
+            removed=$[$removed + 1]
+        fi
+    done
+
+    echo "Found $seen files, $removed removed."
+}
+
+hsb_run() {
+    SCRIPT=$(realpath $1)
+
+    # Is the input file a regular file?
+    if [ ! -f "$SCRIPT" ]; then
+        hsb_fail "$SCRIPT is not a regular file."
+    fi
+
+    # Compute cache binary path
+    BINARY_PATH=$HSBANG_CACHE_DIR/$SCRIPT
+
+    hsb_try_mkdir $(dirname $BINARY_PATH)
+
+    if [ $SCRIPT -nt $BINARY_PATH ]; then
+        hsb_compile $SCRIPT $BINARY_PATH
+    fi
+
+    shift 2
+    $BINARY_PATH $@
+}
+
+hsb_compile() {
+    hsb_say "$1 needs recompiling."
+
+    # The input file may not have an extension.  If this is the case,
+    # we create a .hs temporary file
+    if [ ${1: -3} != ".hs" ] && [ ${1: -4} != ".lhs" ]; then
+        HSB_TMPDIR="$(mktemp -d)"
+        TMPFILE=$HSB_TMPDIR/script.hs
+        cat "$1" > "$TMPFILE"
+        INPUT=$TMPFILE
+    else
+        HSB_TMPDIR=""
+        INPUT=$1
+    fi
+
+    STACK_INVOCATION=$(sed '2s/^-- *//;1d;q' "$INPUT")
+
+    #@FIXME Check that invocation at least begins with "stack "
+
+    $STACK_INVOCATION -- -v$HSBANG_GHC_VERBOSITY $HSBANG_GHC_FLAGS -o "$2" "$INPUT"
+
+    if [ -d "$HSB_TMPDIR" ]; then
+        rm -rf "$HSB_TMPDIR"
+    fi
+
+    #@FIXME Handle errors
+}
+
+# We need at least one argument.
+if [ 0 == $# ]; then
+    hsb_usage 1
+fi
+
+# Set variables
+if [ -z $XDG_CACHE_HOME ]; then
+    XDG_CACHE_HOME=$HOME/.cache
+fi
+
+if [ -z $HSBANG_CACHE_DIR ]; then
+    HSBANG_CACHE_DIR=$XDG_CACHE_HOME/hsbang
+fi
+
+if [ -z $HSBANG_GHC_VERBOSITY ]; then
+    HSBANG_GHC_VERBOSITY=0
+fi
+
+if [ -z $HSBANG_GHC_FLAGS ]; then
+    HSBANG_GHC_FLAGS=$DEFAULT_HSBANG_GHC_FLAGS
+fi
+
+if [ -z $HSBANG_STACK_FLAGS ]; then
+    HSBANG_STACK_FLAGS=$DEFAULT_HSBANG_STACK_FLAGS
+fi
+
+
+# Create cache directory if needed
+HSBANG_CACHE_DIR=$(realpath $HSBANG_CACHE_DIR)
+hsb_try_mkdir $HSBANG_CACHE_DIR
+
+if [ ! -w $HSBANG_CACHE_DIR ]; then
+    hsb_fail "Cache directory $HSBANG_CACHE_DIR isn't writable."
+fi
+
+# Go
+if [ $1 == "--gc" ]; then
+    # --gc takes no further argument
+    if [ 1 != $# ]; then
+        hsb_usage
+    else
+        hsb_gc
+    fi
+else
+    hsb_run $1
+fi
